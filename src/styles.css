@@ -300,7 +300,7 @@ h1 {
 
 .map-mode {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  grid-template-columns: repeat(3, minmax(64px, 1fr));
   gap: 4px;
   padding: 4px;
   border: 1px solid rgba(31, 39, 35, 0.14);
@@ -350,6 +350,14 @@ h1 {
 .map-wrap.is-place-focused .leaflet-tile-pane {
   filter: saturate(0.78) contrast(0.92);
   opacity: 0.68;
+  transition:
+    filter 260ms ease,
+    opacity 260ms ease;
+}
+
+.map-wrap.is-place-focused .leaflet-image-layer {
+  filter: saturate(0.86) contrast(0.96);
+  opacity: 0.72 !important;
   transition:
     filter 260ms ease,
     opacity 260ms ease;
@@ -604,7 +612,7 @@ h1 {
 }
 
 .legend-road {
-  background: linear-gradient(90deg, #496b3f, #9aa49b);
+  background: linear-gradient(90deg, #e8d7a8, #8db9c6);
 }
 
 .detail-card {

@@ -9,7 +9,7 @@ const activeCategory = ref('all')
 const query = ref('')
 const selectedId = ref('library')
 const selectedRouteId = ref('freshman')
-const mapMode = ref('satellite')
+const mapMode = ref('official')
 const mapElement = ref(null)
 const hasFocusedPlace = ref(false)
 
@@ -87,7 +87,22 @@ function pointForPlace(place) {
   return [lat, lng]
 }
 
-function tileLayerForMode(mode) {
+function boundsForCampus(targetCampus) {
+  return [
+    [targetCampus.bounds.south, targetCampus.bounds.west],
+    [targetCampus.bounds.north, targetCampus.bounds.east]
+  ]
+}
+
+function baseLayerForMode(mode) {
+  if (mode === 'official') {
+    return L.imageOverlay(campus.value.mapImage, boundsForCampus(campus.value), {
+      opacity: 1,
+      zIndex: 1,
+      attribution: '<a href="https://www.fcu.edu.tw/map/">逢甲大學校園地圖</a>'
+    })
+  }
+
   if (mode === 'street') {
     return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -167,7 +182,11 @@ function renderRoute() {
 function syncMapToCampus() {
   if (!map || !campus.value) return
 
-  map.setView(campus.value.center, campus.value.zoom, { animate: true })
+  map.fitBounds(boundsForCampus(campus.value), {
+    animate: true,
+    maxZoom: campus.value.zoom,
+    padding: [34, 34]
+  })
   renderMarkers()
   renderRoute()
   nextTick(() => map.invalidateSize())
@@ -177,7 +196,7 @@ function syncBaseLayer() {
   if (!map) return
   if (baseLayer) baseLayer.remove()
 
-  baseLayer = tileLayerForMode(mapMode.value).addTo(map)
+  baseLayer = baseLayerForMode(mapMode.value).addTo(map)
 }
 
 onMounted(() => {
@@ -201,8 +220,16 @@ onBeforeUnmount(() => {
   }
 })
 
-watch(mapMode, syncBaseLayer)
-watch([activeCampus, activeCategory, query, selectedRouteId], () => {
+watch(mapMode, () => {
+  syncBaseLayer()
+  syncMapToCampus()
+})
+watch(activeCampus, () => {
+  syncBaseLayer()
+  syncMapToCampus()
+})
+
+watch([activeCategory, query, selectedRouteId], () => {
   syncMapToCampus()
 })
 
@@ -317,6 +344,9 @@ watch(hasFocusedPlace, () => {
           <div class="map-toolbar__right">
             <p>{{ campus?.summary }}</p>
             <div class="map-mode" aria-label="地圖底圖切換">
+              <button type="button" :class="{ active: mapMode === 'official' }" @click="mapMode = 'official'">
+                校園圖
+              </button>
               <button type="button" :class="{ active: mapMode === 'satellite' }" @click="mapMode = 'satellite'">
                 衛星
               </button>
