@@ -298,29 +298,26 @@ h1 {
   text-align: right;
 }
 
-.map-mode {
-  display: inline-grid;
-  grid-template-columns: repeat(3, minmax(64px, 1fr));
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid rgba(31, 39, 35, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 253, 246, 0.82);
-}
-
-.map-mode button {
+.map-source-badge {
+  display: inline-flex;
+  align-items: center;
   min-height: 34px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #4f5b53;
+  padding: 7px 12px;
+  border: 1px solid rgba(31, 39, 35, 0.14);
+  border-radius: 999px;
+  background: #fff5eb;
+  color: #8f1f2f;
   font-size: 0.88rem;
   font-weight: 800;
 }
 
-.map-mode button.active {
+.map-source-badge::before {
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 999px;
   background: #8f1f2f;
-  color: #fff;
+  content: '';
 }
 
 .map-wrap {
@@ -385,11 +382,12 @@ h1 {
 .leaflet-campus-marker {
   display: grid;
   place-items: center;
-  border: 2px solid rgba(255, 255, 255, 0.92);
-  border-radius: 8px;
-  background: #8f1f2f;
+  min-width: 38px;
+  border: 1px solid rgba(255, 253, 246, 0.96);
+  border-radius: 999px;
+  background: rgba(143, 31, 47, 0.95);
   box-shadow:
-    0 10px 24px rgba(20, 31, 25, 0.34),
+    0 8px 18px rgba(20, 31, 25, 0.28),
     0 0 0 1px rgba(31, 39, 35, 0.22);
   color: #fff;
   opacity: 0.96;
@@ -400,19 +398,20 @@ h1 {
 }
 
 .leaflet-campus-marker span {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 0.78rem;
-  font-weight: 900;
+  font-size: 0.72rem;
+  font-weight: 800;
   line-height: 1;
+  padding: 0 7px;
+  white-space: nowrap;
 }
 
 .leaflet-campus-marker::after {
   position: absolute;
-  bottom: -7px;
-  width: 12px;
-  height: 12px;
-  border-right: 2px solid rgba(255, 255, 255, 0.92);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.92);
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid rgba(255, 253, 246, 0.96);
+  border-bottom: 1px solid rgba(255, 253, 246, 0.96);
   background: inherit;
   content: '';
   transform: rotate(45deg);
@@ -421,9 +420,9 @@ h1 {
 .leaflet-campus-marker.is-selected {
   background: #f3b941;
   color: #241900;
-  transform: translateY(-5px) scale(1.18);
+  transform: translateY(-4px) scale(1.12);
   box-shadow:
-    0 16px 30px rgba(20, 31, 25, 0.44),
+    0 14px 26px rgba(20, 31, 25, 0.36),
     0 0 0 4px rgba(243, 185, 65, 0.28);
 }
 
@@ -434,9 +433,9 @@ h1 {
 
 .leaflet-campus-marker.is-focused::before {
   position: absolute;
-  inset: -12px;
+  inset: -10px;
   border: 2px solid rgba(243, 185, 65, 0.74);
-  border-radius: 14px;
+  border-radius: 999px;
   content: '';
   animation: focus-ring 1.4s ease-out infinite;
 }
@@ -850,11 +849,11 @@ h1 {
   }
 
   72% {
-    transform: translateY(-7px) scale(1.24);
+    transform: translateY(-6px) scale(1.17);
   }
 
   100% {
-    transform: translateY(-5px) scale(1.18);
+    transform: translateY(-4px) scale(1.12);
   }
 }
 

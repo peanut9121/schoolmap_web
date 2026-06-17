@@ -9,7 +9,6 @@ const activeCategory = ref('all')
 const query = ref('')
 const selectedId = ref('library')
 const selectedRouteId = ref('freshman')
-const mapMode = ref('official')
 const mapElement = ref(null)
 const hasFocusedPlace = ref(false)
 
@@ -81,39 +80,21 @@ function clearFocusPanel() {
 
 function pointForPlace(place) {
   const currentCampus = campuses.find((item) => item.id === place.campus)
-  const bounds = currentCampus.bounds
-  const lat = bounds.north - (place.y / 100) * (bounds.north - bounds.south)
-  const lng = bounds.west + (place.x / 100) * (bounds.east - bounds.west)
-  return [lat, lng]
+  return [(place.y / 100) * currentCampus.mapSize.height, (place.x / 100) * currentCampus.mapSize.width]
 }
 
 function boundsForCampus(targetCampus) {
   return [
-    [targetCampus.bounds.south, targetCampus.bounds.west],
-    [targetCampus.bounds.north, targetCampus.bounds.east]
+    [0, 0],
+    [targetCampus.mapSize.height, targetCampus.mapSize.width]
   ]
 }
 
-function baseLayerForMode(mode) {
-  if (mode === 'official') {
-    return L.imageOverlay(campus.value.mapImage, boundsForCampus(campus.value), {
-      opacity: 1,
-      zIndex: 1,
-      attribution: '<a href="https://www.fcu.edu.tw/map/">逢甲大學校園地圖</a>'
-    })
-  }
-
-  if (mode === 'street') {
-    return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    })
-  }
-
-  return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution:
-      'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+function baseLayerForCampus() {
+  return L.imageOverlay(campus.value.mapImage, boundsForCampus(campus.value), {
+    opacity: 1,
+    zIndex: 1,
+    attribution: '<a href="https://www.fcu.edu.tw/map/">逢甲大學校園地圖</a>'
   })
 }
 
@@ -134,9 +115,9 @@ function createMarkerIcon(place) {
       .filter(Boolean)
       .join(' '),
     html: `<span>${place.code}</span>`,
-    iconSize: [48, 38],
-    iconAnchor: [24, 19],
-    popupAnchor: [0, -22]
+    iconSize: [50, 26],
+    iconAnchor: [25, 18],
+    popupAnchor: [0, -20]
   })
 }
 
@@ -184,9 +165,9 @@ function syncMapToCampus() {
 
   map.fitBounds(boundsForCampus(campus.value), {
     animate: true,
-    maxZoom: campus.value.zoom,
     padding: [34, 34]
   })
+  map.setMaxBounds(boundsForCampus(campus.value))
   renderMarkers()
   renderRoute()
   nextTick(() => map.invalidateSize())
@@ -196,15 +177,20 @@ function syncBaseLayer() {
   if (!map) return
   if (baseLayer) baseLayer.remove()
 
-  baseLayer = baseLayerForMode(mapMode.value).addTo(map)
+  baseLayer = baseLayerForCampus().addTo(map)
 }
 
 onMounted(() => {
   map = L.map(mapElement.value, {
-    center: campus.value.center,
-    zoom: campus.value.zoom,
+    crs: L.CRS.Simple,
+    center: [campus.value.mapSize.height / 2, campus.value.mapSize.width / 2],
+    zoom: 0,
+    minZoom: -2,
+    maxZoom: 3,
+    zoomSnap: 0.25,
     zoomControl: false,
-    scrollWheelZoom: true
+    scrollWheelZoom: true,
+    attributionControl: true
   })
 
   L.control.zoom({ position: 'bottomright' }).addTo(map)
@@ -220,10 +206,6 @@ onBeforeUnmount(() => {
   }
 })
 
-watch(mapMode, () => {
-  syncBaseLayer()
-  syncMapToCampus()
-})
 watch(activeCampus, () => {
   syncBaseLayer()
   syncMapToCampus()
@@ -236,14 +218,14 @@ watch([activeCategory, query, selectedRouteId], () => {
 watch(selectedPlace, (place) => {
   if (!map || !place) return
   renderMarkers()
-  const targetZoom = hasFocusedPlace.value ? Math.max(map.getZoom(), campus.value.zoom + 1) : map.getZoom()
+  const targetZoom = hasFocusedPlace.value ? Math.max(map.getZoom(), 0.35) : map.getZoom()
   map.flyTo(pointForPlace(place), targetZoom, { animate: true, duration: 0.72 })
 })
 
 watch(hasFocusedPlace, () => {
   renderMarkers()
   if (map && hasFocusedPlace.value && selectedPlace.value) {
-    map.flyTo(pointForPlace(selectedPlace.value), Math.max(map.getZoom(), campus.value.zoom + 1), {
+    map.flyTo(pointForPlace(selectedPlace.value), Math.max(map.getZoom(), 0.35), {
       animate: true,
       duration: 0.72
     })
@@ -343,17 +325,7 @@ watch(hasFocusedPlace, () => {
           </div>
           <div class="map-toolbar__right">
             <p>{{ campus?.summary }}</p>
-            <div class="map-mode" aria-label="地圖底圖切換">
-              <button type="button" :class="{ active: mapMode === 'official' }" @click="mapMode = 'official'">
-                校園圖
-              </button>
-              <button type="button" :class="{ active: mapMode === 'satellite' }" @click="mapMode = 'satellite'">
-                衛星
-              </button>
-              <button type="button" :class="{ active: mapMode === 'street' }" @click="mapMode = 'street'">
-                街圖
-              </button>
-            </div>
+            <span class="map-source-badge">官網校園圖座標</span>
           </div>
         </div>
 
@@ -382,9 +354,9 @@ watch(hasFocusedPlace, () => {
           </article>
 
           <div class="map-legend">
-            <span><i class="legend-building"></i> 地點標記</span>
+            <span><i class="legend-building"></i> 官網地標</span>
             <span><i class="legend-route"></i> 推薦路線</span>
-            <span><i class="legend-road"></i> 真實底圖</span>
+            <span><i class="legend-road"></i> 裁切校園範圍</span>
           </div>
         </div>
       </section>
