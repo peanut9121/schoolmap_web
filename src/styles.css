@@ -535,6 +535,15 @@ h1 {
   object-fit: cover;
 }
 
+.landmark-focus-card img.is-map-reference,
+.detail-photo img.is-map-reference {
+  object-fit: contain;
+  padding: 10px;
+  background:
+    linear-gradient(135deg, rgba(143, 31, 47, 0.08), transparent 36%),
+    #f7f1e7;
+}
+
 .landmark-focus-card figcaption {
   position: absolute;
   right: 0;

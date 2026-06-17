@@ -11,6 +11,7 @@ const selectedId = ref('library')
 const selectedRouteId = ref('freshman')
 const mapElement = ref(null)
 const hasFocusedPlace = ref(false)
+const photoLoadFailed = ref(false)
 
 let map
 let baseLayer
@@ -47,7 +48,15 @@ const selectedPlace = computed(() => {
   const direct = places.find((place) => place.id === selectedId.value)
   return direct?.campus === activeCampus.value ? direct : filteredPlaces.value[0] ?? campusPlaces.value[0]
 })
-const selectedPhoto = computed(() => placePhotos[selectedPlace.value?.id] ?? defaultPlacePhoto)
+const campusFallbackPhoto = computed(() => ({
+  url: campus.value?.mapImage ?? defaultPlacePhoto.url,
+  caption: `${campus.value?.name ?? '校園'}官網校園圖定位`,
+  credit: '逢甲大學校園地圖',
+  source: 'https://www.fcu.edu.tw/map/',
+  kind: 'map'
+}))
+const selectedPhoto = computed(() => placePhotos[selectedPlace.value?.id] ?? campusFallbackPhoto.value)
+const displayedPhoto = computed(() => (photoLoadFailed.value ? campusFallbackPhoto.value : selectedPhoto.value))
 const focusPanelActive = computed(() => hasFocusedPlace.value && selectedPlace.value)
 
 const stats = computed(() => [
@@ -76,6 +85,10 @@ function selectPlace(id, focus = true) {
 
 function clearFocusPanel() {
   hasFocusedPlace.value = false
+}
+
+function handlePhotoError() {
+  photoLoadFailed.value = true
 }
 
 function pointForPlace(place) {
@@ -217,6 +230,7 @@ watch([activeCategory, query, selectedRouteId], () => {
 
 watch(selectedPlace, (place) => {
   if (!map || !place) return
+  photoLoadFailed.value = false
   renderMarkers()
   const targetZoom = hasFocusedPlace.value ? Math.max(map.getZoom(), 0.35) : map.getZoom()
   map.flyTo(pointForPlace(place), targetZoom, { animate: true, duration: 0.72 })
@@ -335,10 +349,15 @@ watch(hasFocusedPlace, () => {
           <article v-if="focusPanelActive" class="landmark-focus-card" aria-live="polite">
             <button class="focus-close" type="button" aria-label="收起地標快覽" @click="clearFocusPanel">×</button>
             <figure>
-              <img :src="selectedPhoto.url" :alt="`${selectedPlace.name}實景照片`" />
+              <img
+                :class="{ 'is-map-reference': displayedPhoto.kind === 'map' }"
+                :src="displayedPhoto.url"
+                :alt="`${selectedPlace.name}參考圖片`"
+                @error="handlePhotoError"
+              />
               <figcaption>
-                {{ selectedPhoto.caption }}
-                <a :href="selectedPhoto.source" target="_blank" rel="noreferrer">{{ selectedPhoto.credit }}</a>
+                {{ displayedPhoto.caption }}
+                <a :href="displayedPhoto.source" target="_blank" rel="noreferrer">{{ displayedPhoto.credit }}</a>
               </figcaption>
             </figure>
             <div class="focus-copy">
@@ -363,8 +382,13 @@ watch(hasFocusedPlace, () => {
 
       <aside class="detail-card" v-if="selectedPlace">
         <figure class="detail-photo">
-          <img :src="selectedPhoto.url" :alt="`${selectedPlace.name}參考照片`" />
-          <figcaption>{{ selectedPhoto.caption }}</figcaption>
+          <img
+            :class="{ 'is-map-reference': displayedPhoto.kind === 'map' }"
+            :src="displayedPhoto.url"
+            :alt="`${selectedPlace.name}參考圖片`"
+            @error="handlePhotoError"
+          />
+          <figcaption>{{ displayedPhoto.caption }}</figcaption>
         </figure>
         <p class="section-kicker">目前選取</p>
         <h2>{{ selectedPlace.name }}</h2>
