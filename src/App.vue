@@ -2,13 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { campuses, categories, defaultPlacePhoto, placePhotos, places, routes, sources } from './data/campus'
+import { campuses, categories, defaultPlacePhoto, placePhotos, places, sources } from './data/campus'
 
 const activeCampus = ref('main')
 const activeCategory = ref('all')
 const query = ref('')
 const selectedId = ref('library')
-const selectedRouteId = ref('freshman')
 const mapElement = ref(null)
 const hasFocusedPlace = ref(false)
 const photoLoadFailed = ref(false)
@@ -16,17 +15,9 @@ const photoLoadFailed = ref(false)
 let map
 let baseLayer
 let markerLayer
-let routeLayer
 
 const campus = computed(() => campuses.find((item) => item.id === activeCampus.value))
 const campusPlaces = computed(() => places.filter((place) => place.campus === activeCampus.value))
-const selectedRoute = computed(() => routes.find((route) => route.id === selectedRouteId.value))
-const routeStops = computed(() => new Set(selectedRoute.value?.stops ?? []))
-const routePlaces = computed(() =>
-  (selectedRoute.value?.stops ?? [])
-    .map((id) => places.find((place) => place.id === id))
-    .filter((place) => place?.campus === activeCampus.value)
-)
 
 const filteredPlaces = computed(() => {
   const keyword = query.value.trim().toLowerCase()
@@ -35,7 +26,7 @@ const filteredPlaces = computed(() => {
     const matchCategory = activeCategory.value === 'all' || place.category === activeCategory.value
     const matchKeyword =
       !keyword ||
-      [place.name, place.code, place.intro, ...place.usefulFor, ...place.facilities]
+      [place.name, place.code, place.intro, place.activity?.title, place.activity?.detail, ...place.usefulFor, ...place.facilities]
         .join(' ')
         .toLowerCase()
         .includes(keyword)
@@ -58,11 +49,12 @@ const campusFallbackPhoto = computed(() => ({
 const selectedPhoto = computed(() => placePhotos[selectedPlace.value?.id] ?? campusFallbackPhoto.value)
 const displayedPhoto = computed(() => (photoLoadFailed.value ? campusFallbackPhoto.value : selectedPhoto.value))
 const focusPanelActive = computed(() => hasFocusedPlace.value && selectedPlace.value)
+const selectedActivity = computed(() => selectedPlace.value?.activity)
 
 const stats = computed(() => [
   { label: '校區', value: campuses.length },
   { label: '地點', value: places.length },
-  { label: '新生路線', value: routes.length }
+  { label: '活動欄位', value: places.filter((place) => place.activity).length }
 ])
 
 function selectCampus(id) {
@@ -70,21 +62,20 @@ function selectCampus(id) {
   const firstPlace = places.find((place) => place.campus === id)
   selectedId.value = firstPlace?.id ?? selectedId.value
   hasFocusedPlace.value = false
-
-  if (!selectedRoute.value?.stops.some((stop) => places.find((p) => p.id === stop)?.campus === id)) {
-    selectedRouteId.value =
-      routes.find((route) => route.stops.some((stop) => places.find((p) => p.id === stop)?.campus === id))?.id ??
-      'freshman'
-  }
 }
 
 function selectPlace(id, focus = true) {
   selectedId.value = id
   hasFocusedPlace.value = focus
+
+  if (focus) {
+    nextTick(() => focusMapOnPlace(selectedPlace.value))
+  }
 }
 
 function clearFocusPanel() {
   hasFocusedPlace.value = false
+  resetMapToCampus()
 }
 
 function handlePhotoError() {
@@ -111,10 +102,48 @@ function baseLayerForCampus() {
   })
 }
 
+function clamp(value, min, max) {
+  if (max < min) return (min + max) / 2
+  return Math.min(Math.max(value, min), max)
+}
+
+function boundedCenterForPlace(place, zoom) {
+  const target = L.latLng(pointForPlace(place))
+  const campusBounds = boundsForCampus(campus.value)
+  const projectedCorners = [
+    map.project(campusBounds[0], zoom),
+    map.project([campusBounds[0][0], campusBounds[1][1]], zoom),
+    map.project([campusBounds[1][0], campusBounds[0][1]], zoom),
+    map.project(campusBounds[1], zoom)
+  ]
+  const minX = Math.min(...projectedCorners.map((point) => point.x))
+  const maxX = Math.max(...projectedCorners.map((point) => point.x))
+  const minY = Math.min(...projectedCorners.map((point) => point.y))
+  const maxY = Math.max(...projectedCorners.map((point) => point.y))
+  const halfSize = map.getSize().divideBy(2)
+  const projectedTarget = map.project(target, zoom)
+  const x = clamp(projectedTarget.x, minX + halfSize.x, maxX - halfSize.x)
+  const y = clamp(projectedTarget.y, minY + halfSize.y, maxY - halfSize.y)
+
+  return map.unproject(L.point(x, y), zoom)
+}
+
+function focusMapOnPlace(place) {
+  if (!map || !place || !campus.value) return
+
+  const targetZoom = Math.min(map.getMaxZoom(), Math.max(map.getZoom(), 1.35))
+  const safeCenter = boundedCenterForPlace(place, targetZoom)
+  map.stop()
+  map.flyTo(safeCenter, targetZoom, {
+    animate: true,
+    duration: 0.72,
+    easeLinearity: 0.22
+  })
+}
+
 function createMarkerIcon(place) {
   const isSelected = selectedPlace.value?.id === place.id
   const isMuted = !filteredPlaces.value.some((item) => item.id === place.id)
-  const isRouted = routeStops.value.has(place.id)
 
   return L.divIcon({
     className: [
@@ -122,8 +151,7 @@ function createMarkerIcon(place) {
       `marker-${place.category}`,
       isSelected ? 'is-selected' : '',
       isSelected && hasFocusedPlace.value ? 'is-focused' : '',
-      isMuted ? 'is-muted' : '',
-      isRouted ? 'is-routed' : ''
+      isMuted ? 'is-muted' : ''
     ]
       .filter(Boolean)
       .join(' '),
@@ -157,33 +185,22 @@ function renderMarkers() {
   })
 }
 
-function renderRoute() {
-  if (!map) return
-  if (routeLayer) routeLayer.remove()
-
-  const points = routePlaces.value.map(pointForPlace)
-  if (points.length < 2) return
-
-  routeLayer = L.polyline(points, {
-    color: '#f3b941',
-    weight: 5,
-    opacity: 0.95,
-    dashArray: '10 8',
-    lineCap: 'round'
-  }).addTo(map)
+function refreshMapMarkers() {
+  renderMarkers()
+  nextTick(() => map?.invalidateSize())
 }
 
-function syncMapToCampus() {
+function resetMapToCampus({ animate = true } = {}) {
   if (!map || !campus.value) return
 
-  map.fitBounds(boundsForCampus(campus.value), {
-    animate: true,
+  const campusBounds = boundsForCampus(campus.value)
+  map.stop()
+  map.setMaxBounds(campusBounds)
+  map.fitBounds(campusBounds, {
+    animate,
     padding: [34, 34]
   })
-  map.setMaxBounds(boundsForCampus(campus.value))
-  renderMarkers()
-  renderRoute()
-  nextTick(() => map.invalidateSize())
+  refreshMapMarkers()
 }
 
 function syncBaseLayer() {
@@ -209,7 +226,7 @@ onMounted(() => {
   L.control.zoom({ position: 'bottomright' }).addTo(map)
   markerLayer = L.layerGroup().addTo(map)
   syncBaseLayer()
-  syncMapToCampus()
+  resetMapToCampus({ animate: false })
 })
 
 onBeforeUnmount(() => {
@@ -221,29 +238,21 @@ onBeforeUnmount(() => {
 
 watch(activeCampus, () => {
   syncBaseLayer()
-  syncMapToCampus()
+  resetMapToCampus()
 })
 
-watch([activeCategory, query, selectedRouteId], () => {
-  syncMapToCampus()
+watch([activeCategory, query], () => {
+  refreshMapMarkers()
 })
 
 watch(selectedPlace, (place) => {
   if (!map || !place) return
   photoLoadFailed.value = false
   renderMarkers()
-  const targetZoom = hasFocusedPlace.value ? Math.max(map.getZoom(), 0.35) : map.getZoom()
-  map.flyTo(pointForPlace(place), targetZoom, { animate: true, duration: 0.72 })
 })
 
 watch(hasFocusedPlace, () => {
   renderMarkers()
-  if (map && hasFocusedPlace.value && selectedPlace.value) {
-    map.flyTo(pointForPlace(selectedPlace.value), Math.max(map.getZoom(), 0.35), {
-      animate: true,
-      duration: 0.72
-    })
-  }
 })
 </script>
 
@@ -254,7 +263,7 @@ watch(hasFocusedPlace, () => {
         <p class="eyebrow">Feng Chia University Campus Navigator</p>
         <h1>逢甲大學動態校園地圖</h1>
         <p>
-          把教學大樓、宿舍、圖書館、體育與社團活動空間整理成一張可搜尋、可篩選、可走路線的學生導覽圖。
+          把教學大樓、宿舍、圖書館、體育與社團活動空間整理成一張可搜尋、可篩選、可公告活動的學生導覽圖。
         </p>
       </div>
 
@@ -304,16 +313,6 @@ watch(hasFocusedPlace, () => {
           </div>
         </div>
 
-        <div>
-          <p class="section-kicker">快速路線</p>
-          <select v-model="selectedRouteId" class="route-select">
-            <option v-for="route in routes" :key="route.id" :value="route.id">
-              {{ route.name }}
-            </option>
-          </select>
-          <p class="route-description">{{ selectedRoute?.description }}</p>
-        </div>
-
         <div class="place-list" aria-label="地點列表">
           <button
             v-for="place in filteredPlaces"
@@ -326,7 +325,6 @@ watch(hasFocusedPlace, () => {
               <strong>{{ place.name }}</strong>
               <small>{{ place.code }} · {{ categories.find((item) => item.id === place.category)?.label }}</small>
             </span>
-            <i v-if="routeStops.has(place.id)">路線</i>
           </button>
         </div>
       </aside>
@@ -374,7 +372,6 @@ watch(hasFocusedPlace, () => {
 
           <div class="map-legend">
             <span><i class="legend-building"></i> 官網地標</span>
-            <span><i class="legend-route"></i> 推薦路線</span>
             <span><i class="legend-road"></i> 裁切校園範圍</span>
           </div>
         </div>
@@ -394,6 +391,15 @@ watch(hasFocusedPlace, () => {
         <h2>{{ selectedPlace.name }}</h2>
         <p class="code">{{ selectedPlace.code }} · {{ campus?.name }}</p>
         <p class="intro">{{ selectedPlace.intro }}</p>
+
+        <div class="activity-notice" v-if="selectedActivity">
+          <div>
+            <span>{{ selectedActivity.status }}</span>
+            <strong>{{ selectedActivity.date }}</strong>
+          </div>
+          <h3>{{ selectedActivity.title }}</h3>
+          <p>{{ selectedActivity.detail }}</p>
+        </div>
 
         <div class="info-block">
           <h3>學生常用</h3>
