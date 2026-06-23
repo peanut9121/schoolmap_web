@@ -7,6 +7,7 @@ import engineeringPhoto from '../assets/photos/engineering.webp'
 import languagePhoto from '../assets/photos/language.webp'
 import renyanPhoto from '../assets/photos/renyan.webp'
 import sciencePhoto from '../assets/photos/science.webp'
+import scienceAeroPhoto from '../assets/photos/science-aero.jpg'
 import sportsPhoto from '../assets/photos/sports.webp'
 import xuesiPhoto from '../assets/photos/xuesi.jpg'
 import zhongqinPhoto from '../assets/photos/zhongqin.jpg'
@@ -52,6 +53,12 @@ export const buildingPhotoRecords = [
     placeId: 'science',
     url: sciencePhoto,
     caption: '理學大樓建築實景',
+    credit: '本專案建築照片資料庫'
+  },
+  {
+    placeId: 'science-aero',
+    url: scienceAeroPhoto,
+    caption: '科學與航太館建築實景',
     credit: '本專案建築照片資料庫'
   },
   {
