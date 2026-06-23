@@ -1,6 +1,7 @@
 import mainCampusMap from '../assets/maps/main-campus.png'
 import fuxingCampusMap from '../assets/maps/fuxing-campus.png'
 import ctspCampusMap from '../assets/maps/ctsp-campus.png'
+import { buildingPhotoMap } from './buildingPhotoDatabase'
 
 export const categories = [
   { id: 'all', label: '全部' },
@@ -492,7 +493,7 @@ export const defaultPlacePhoto = {
   source: 'https://commons.wikimedia.org/wiki/File:Rain_in_West_Gate,_FCU_Main_Campus_20190817.jpg'
 }
 
-export const placePhotos = {
+const externalPlacePhotos = {
   library: {
     url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Feng%20Chia%20University%20Library%2020111101%20night.jpg',
     caption: '逢甲大學圖書館入口實景',
@@ -511,6 +512,11 @@ export const placePhotos = {
     credit: 'Wikimedia Commons',
     source: 'https://commons.wikimedia.org/wiki/File:Rain_in_West_Gate,_FCU_Main_Campus_20190817.jpg'
   }
+}
+
+export const placePhotos = {
+  ...externalPlacePhotos,
+  ...buildingPhotoMap
 }
 
 export const sources = [

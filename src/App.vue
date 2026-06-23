@@ -54,7 +54,7 @@ const selectedActivity = computed(() => selectedPlace.value?.activity)
 const stats = computed(() => [
   { label: '校區', value: campuses.length },
   { label: '地點', value: places.length },
-  { label: '活動欄位', value: places.filter((place) => place.activity).length }
+  { label: '建築照片', value: Object.keys(placePhotos).length }
 ])
 
 function selectCampus(id) {
@@ -355,7 +355,10 @@ watch(hasFocusedPlace, () => {
               />
               <figcaption>
                 {{ displayedPhoto.caption }}
-                <a :href="displayedPhoto.source" target="_blank" rel="noreferrer">{{ displayedPhoto.credit }}</a>
+                <a v-if="displayedPhoto.source" :href="displayedPhoto.source" target="_blank" rel="noreferrer">
+                  {{ displayedPhoto.credit }}
+                </a>
+                <span v-else>{{ displayedPhoto.credit }}</span>
               </figcaption>
             </figure>
             <div class="focus-copy">

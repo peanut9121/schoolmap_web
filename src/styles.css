@@ -548,7 +548,8 @@ h1 {
   line-height: 1.4;
 }
 
-.landmark-focus-card figcaption a {
+.landmark-focus-card figcaption a,
+.landmark-focus-card figcaption span {
   display: inline-block;
   margin-left: 4px;
   color: #ffde86;
