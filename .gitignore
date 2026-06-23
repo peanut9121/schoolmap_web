@@ -5,6 +5,7 @@ dist/
 .env.*
 work/
 outputs/
+*.sqlite-journal
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

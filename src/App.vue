@@ -2,7 +2,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { campuses, categories, defaultPlacePhoto, placePhotos, places, sources } from './data/campus'
+import {
+  campuses as staticCampuses,
+  categories as staticCategories,
+  defaultPlacePhoto,
+  placePhotos as staticPlacePhotos,
+  places as staticPlaces,
+  sources as staticSources
+} from './data/campus'
+import { loadCampusDataset } from './data/apiCampus'
 
 const activeCampus = ref('main')
 const activeCategory = ref('all')
@@ -11,13 +19,19 @@ const selectedId = ref('library')
 const mapElement = ref(null)
 const hasFocusedPlace = ref(false)
 const photoLoadFailed = ref(false)
+const categories = ref(staticCategories)
+const campuses = ref(staticCampuses)
+const places = ref(staticPlaces)
+const placePhotos = ref(staticPlacePhotos)
+const sources = ref(staticSources)
+const dataMode = ref('靜態')
 
 let map
 let baseLayer
 let markerLayer
 
-const campus = computed(() => campuses.find((item) => item.id === activeCampus.value))
-const campusPlaces = computed(() => places.filter((place) => place.campus === activeCampus.value))
+const campus = computed(() => campuses.value.find((item) => item.id === activeCampus.value))
+const campusPlaces = computed(() => places.value.filter((place) => place.campus === activeCampus.value))
 
 const filteredPlaces = computed(() => {
   const keyword = query.value.trim().toLowerCase()
@@ -36,7 +50,7 @@ const filteredPlaces = computed(() => {
 })
 
 const selectedPlace = computed(() => {
-  const direct = places.find((place) => place.id === selectedId.value)
+  const direct = places.value.find((place) => place.id === selectedId.value)
   return direct?.campus === activeCampus.value ? direct : filteredPlaces.value[0] ?? campusPlaces.value[0]
 })
 const campusFallbackPhoto = computed(() => ({
@@ -46,20 +60,21 @@ const campusFallbackPhoto = computed(() => ({
   source: 'https://www.fcu.edu.tw/map/',
   kind: 'map'
 }))
-const selectedPhoto = computed(() => placePhotos[selectedPlace.value?.id] ?? campusFallbackPhoto.value)
+const selectedPhoto = computed(() => placePhotos.value[selectedPlace.value?.id] ?? campusFallbackPhoto.value)
 const displayedPhoto = computed(() => (photoLoadFailed.value ? campusFallbackPhoto.value : selectedPhoto.value))
 const focusPanelActive = computed(() => hasFocusedPlace.value && selectedPlace.value)
 const selectedActivity = computed(() => selectedPlace.value?.activity)
 
 const stats = computed(() => [
-  { label: '校區', value: campuses.length },
-  { label: '地點', value: places.length },
-  { label: '建築照片', value: Object.keys(placePhotos).length }
+  { label: '校區', value: campuses.value.length },
+  { label: '地點', value: places.value.length },
+  { label: '建築照片', value: Object.keys(placePhotos.value).length },
+  { label: '資料模式', value: dataMode.value }
 ])
 
 function selectCampus(id) {
   activeCampus.value = id
-  const firstPlace = places.find((place) => place.campus === id)
+  const firstPlace = places.value.find((place) => place.campus === id)
   selectedId.value = firstPlace?.id ?? selectedId.value
   hasFocusedPlace.value = false
 }
@@ -83,7 +98,7 @@ function handlePhotoError() {
 }
 
 function pointForPlace(place) {
-  const currentCampus = campuses.find((item) => item.id === place.campus)
+  const currentCampus = campuses.value.find((item) => item.id === place.campus)
   return [(place.y / 100) * currentCampus.mapSize.height, (place.x / 100) * currentCampus.mapSize.width]
 }
 
@@ -210,6 +225,27 @@ function syncBaseLayer() {
   baseLayer = baseLayerForCampus().addTo(map)
 }
 
+async function hydrateCampusDataset() {
+  const dataset = await loadCampusDataset({ fallbackCampuses: staticCampuses })
+  if (!dataset) return
+
+  categories.value = dataset.categories
+  campuses.value = dataset.campuses
+  places.value = dataset.places
+  placePhotos.value = {
+    ...staticPlacePhotos,
+    ...dataset.placePhotos
+  }
+  sources.value = dataset.sources
+  dataMode.value = 'API'
+  photoLoadFailed.value = false
+
+  if (map) {
+    syncBaseLayer()
+    resetMapToCampus({ animate: false })
+  }
+}
+
 onMounted(() => {
   map = L.map(mapElement.value, {
     crs: L.CRS.Simple,
@@ -227,6 +263,7 @@ onMounted(() => {
   markerLayer = L.layerGroup().addTo(map)
   syncBaseLayer()
   resetMapToCampus({ animate: false })
+  hydrateCampusDataset()
 })
 
 onBeforeUnmount(() => {
