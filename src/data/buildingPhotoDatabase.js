@@ -1,4 +1,5 @@
 import activityPhoto from '../assets/photos/activity.webp'
+import admin2Photo from '../assets/photos/admin-2.jpg'
 import adminPhoto from '../assets/photos/admin.jpg'
 import businessPhoto from '../assets/photos/business.jpg'
 import cieePhoto from '../assets/photos/ciee.webp'
@@ -71,6 +72,12 @@ export const buildingPhotoRecords = [
     placeId: 'admin',
     url: adminPhoto,
     caption: '行政大樓建築實景',
+    credit: '本專案建築照片資料庫'
+  },
+  {
+    placeId: 'admin-2',
+    url: admin2Photo,
+    caption: '行政二館建築實景',
     credit: '本專案建築照片資料庫'
   },
   {
