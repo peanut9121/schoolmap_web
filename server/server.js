@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDatabase, parseJson, databasePath } from './db.js'
+import { fetchOfficialEvents, syncOfficialEvents } from './officialEvents.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -54,7 +55,22 @@ function mapActivity(row) {
   }
 }
 
+function mapOfficialActivity(row) {
+  if (!row?.official_title) return undefined
+
+  return {
+    status: '官網活動',
+    date: row.official_date,
+    title: row.official_title,
+    detail: [row.official_location, row.official_unit].filter(Boolean).join('｜') || '同步自逢甲大學官網活動資訊。',
+    source: row.official_source_url,
+    syncedAt: row.official_synced_at
+  }
+}
+
 function mapPlace(row) {
+  const officialActivity = mapOfficialActivity(row)
+
   return {
     id: row.id,
     campus: row.campus_id,
@@ -67,12 +83,14 @@ function mapPlace(row) {
     usefulFor: parseJson(row.useful_for),
     facilities: parseJson(row.facilities),
     tip: row.tip,
-    activity: mapActivity({
-      status: row.activity_status ?? row.template_status,
-      date: row.activity_date ?? row.template_date,
-      title: row.activity_title ?? row.template_title,
-      detail: row.activity_detail ?? row.template_detail
-    })
+    activity:
+      officialActivity ??
+      mapActivity({
+        status: row.activity_status ?? row.template_status,
+        date: row.activity_date ?? row.template_date,
+        title: row.activity_title ?? row.template_title,
+        detail: row.activity_detail ?? row.template_detail
+      })
   }
 }
 
@@ -85,6 +103,32 @@ function mapPhoto(row) {
     source: row.source ?? '',
     kind: row.kind ?? 'photo'
   }
+}
+
+function mapOfficialEvent(row) {
+  return {
+    placeId: row.place_id,
+    title: row.title,
+    date: row.date,
+    location: row.location,
+    unit: row.unit,
+    sourceUrl: row.source_url,
+    syncedAt: row.synced_at
+  }
+}
+
+function officialEventJoinSql() {
+  return `
+    LEFT JOIN (
+      SELECT official_events.*
+      FROM official_events
+      INNER JOIN (
+        SELECT place_id, MIN(id) AS id
+        FROM official_events
+        GROUP BY place_id
+      ) latest_events ON latest_events.id = official_events.id
+    ) official_events ON official_events.place_id = places.id
+  `
 }
 
 app.get('/api/health', (req, res) => {
@@ -117,9 +161,16 @@ app.get('/api/places', (req, res) => {
           category_activity_templates.status AS template_status,
           category_activity_templates.date AS template_date,
           category_activity_templates.title AS template_title,
-          category_activity_templates.detail AS template_detail
+          category_activity_templates.detail AS template_detail,
+          official_events.title AS official_title,
+          official_events.date AS official_date,
+          official_events.location AS official_location,
+          official_events.unit AS official_unit,
+          official_events.source_url AS official_source_url,
+          official_events.synced_at AS official_synced_at
         FROM places
         LEFT JOIN activities ON activities.place_id = places.id
+        ${officialEventJoinSql()}
         LEFT JOIN category_activity_templates ON category_activity_templates.category_id = places.category_id
         ORDER BY places.rowid
       `
@@ -142,9 +193,16 @@ app.get('/api/places/:id', (req, res) => {
           category_activity_templates.status AS template_status,
           category_activity_templates.date AS template_date,
           category_activity_templates.title AS template_title,
-          category_activity_templates.detail AS template_detail
+          category_activity_templates.detail AS template_detail,
+          official_events.title AS official_title,
+          official_events.date AS official_date,
+          official_events.location AS official_location,
+          official_events.unit AS official_unit,
+          official_events.source_url AS official_source_url,
+          official_events.synced_at AS official_synced_at
         FROM places
         LEFT JOIN activities ON activities.place_id = places.id
+        ${officialEventJoinSql()}
         LEFT JOIN category_activity_templates ON category_activity_templates.category_id = places.category_id
         WHERE places.id = ?
       `
@@ -178,6 +236,39 @@ app.get('/api/photos/:placeId', (req, res) => {
 app.get('/api/activities', (req, res) => {
   const rows = db.prepare('SELECT place_id AS placeId, status, date, title, detail FROM activities ORDER BY rowid').all()
   res.json(rows)
+})
+
+app.get('/api/official-events', async (req, res) => {
+  try {
+    if (req.query.refresh === '1' || req.query.refresh === 'true') {
+      const events = await fetchOfficialEvents()
+      syncOfficialEvents(db, events)
+    }
+
+    const rows = db.prepare('SELECT * FROM official_events ORDER BY rowid').all()
+    res.json(rows.map(mapOfficialEvent))
+  } catch (error) {
+    res.status(502).json({
+      error: 'Failed to fetch official events',
+      message: error.message
+    })
+  }
+})
+
+app.post('/api/sync-official-events', async (req, res) => {
+  try {
+    const events = await fetchOfficialEvents()
+    syncOfficialEvents(db, events)
+    res.json({
+      synced: events.length,
+      events
+    })
+  } catch (error) {
+    res.status(502).json({
+      error: 'Failed to sync official events',
+      message: error.message
+    })
+  }
 })
 
 app.post('/api/activities', (req, res) => {

@@ -55,6 +55,18 @@ db.exec(`
     FOREIGN KEY (place_id) REFERENCES places(id)
   );
 
+  CREATE TABLE IF NOT EXISTS official_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    place_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    date TEXT NOT NULL,
+    location TEXT DEFAULT '',
+    unit TEXT DEFAULT '',
+    source_url TEXT NOT NULL,
+    synced_at TEXT NOT NULL,
+    FOREIGN KEY (place_id) REFERENCES places(id)
+  );
+
   CREATE TABLE IF NOT EXISTS category_activity_templates (
     category_id TEXT PRIMARY KEY,
     status TEXT NOT NULL,
@@ -73,6 +85,7 @@ db.exec(`
 
 db.exec(`
   DELETE FROM sources;
+  DELETE FROM official_events;
   DELETE FROM activities;
   DELETE FROM photos;
   DELETE FROM places;

@@ -439,6 +439,9 @@ watch(hasFocusedPlace, () => {
           </div>
           <h3>{{ selectedActivity.title }}</h3>
           <p>{{ selectedActivity.detail }}</p>
+          <a v-if="selectedActivity.source" :href="selectedActivity.source" target="_blank" rel="noreferrer">
+            查看官網公告
+          </a>
         </div>
 
         <div class="info-block">

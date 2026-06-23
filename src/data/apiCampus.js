@@ -29,6 +29,8 @@ export async function loadCampusDataset({ fallbackCampuses }) {
   if (!baseUrl) return null
 
   try {
+    await fetchJson('/api/official-events?refresh=1', baseUrl)
+
     const [categories, campuses, places, photos, sources] = await Promise.all([
       fetchJson('/api/categories', baseUrl),
       fetchJson('/api/campuses', baseUrl),
